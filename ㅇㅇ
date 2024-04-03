@@ -1,0 +1,14 @@
+@bot.slash_command(name='랜덤')
+async def random(ctx):
+    embed = discord.Embed(title="랜덤", description="아래 버튼을 눌러주세요.", color=discord.Color.green())
+    await ctx.respond(embed=embed, view=RandomButton())
+
+class RandomButton(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="1", style=discord.ButtonStyle.green, custom_id="choice_1")
+    async def choice_1(self, button: discord.ui.Button, interaction: discord.Interaction):
+        chosen = random.choice(["1", "2"])
+        await interaction.response.send_message(content=chosen, ephemeral=True)
+bot.run(TOKEN)
