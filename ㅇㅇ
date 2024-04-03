@@ -1,3 +1,16 @@
+import discord
+import random
+from discord.ext import commands
+
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+admin_id = 1218194406147096580
+TOKEN = ""
+@bot.event
+async def on_ready():
+    print(f'We have logged in as {bot.user}')
+
 @bot.slash_command(name='랜덤')
 async def random(ctx):
     embed = discord.Embed(title="랜덤", description="아래 버튼을 눌러주세요.", color=discord.Color.green())
