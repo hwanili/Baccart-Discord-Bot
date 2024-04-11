@@ -125,6 +125,106 @@ async def baccarat(ctx, bet_amount: int, choice: str):
     embed = discord.Embed(title="바카라",description=f"플레이어 카드: {game.player_cards}\n뱅커 카드: {game.banker_cards}\n{result}이(가) 나왔습니다. {'배팅금액의 2배인 '+str(winnings)+'원을(를) 획득하셨습니다.' if winnings > 0 else '아쉽지만 베팅액을 잃었습니다.'}", color=discord.Color.green())
     await ctx.respond(embed=embed)
 
+ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
+cards = [{'rank': rank} for rank in ranks]
+
+class BlackjackGame:
+    def __init__(self):
+        self.player_hand = []
+        self.dealer_hand = []
+
+    def deal_cards(self):
+        random.shuffle(cards)
+        self.player_hand = [cards.pop(), cards.pop()]
+        self.dealer_hand = [cards.pop(), cards.pop()]
+
+    def hit(self):
+        self.player_hand.append(cards.pop())
+
+    def reveal_dealer_card(self):
+        return self.dealer_hand[0]
+
+@bot.slash_command(name='블랙잭', description='블랙잭 게임을 시작합니다.')
+async def start_blackjack(ctx, bet_amount: int):
+    if bet_amount <= 0:
+        await ctx.channel.trigger_typing()  
+        embed = discord.Embed(title="오류", description="베팅 금액은 0보다 커야 합니다.", color=discord.Color.red())
+        await ctx.respond(embed=embed)
+        return
+
+    if ctx.author.id not in user_balances:
+        user_balances[ctx.author.id] = 0
+
+    if user_balances[ctx.author.id] < bet_amount:
+        await ctx.channel.trigger_typing()  
+        embed = discord.Embed(title="오류", description="잔액이 부족합니다.", color=discord.Color.red())
+        await ctx.respond(embed=embed)
+        return
+
+    game = BlackjackGame()
+    game.deal_cards()
+    
+    dealer_card = game.reveal_dealer_card()
+    embed = discord.Embed(title="블랙잭", description=f'딜러의 첫 번째 카드: {dealer_card["rank"]}', color=discord.Color.green())
+    await ctx.respond(embed=embed)
+
+    player_cards_str = ', '.join([card["rank"] for card in game.player_hand])
+    player_total = sum([10 if card["rank"] in ['J', 'Q', 'K'] else 11 if card["rank"] == 'A' else int(card["rank"]) for card in game.player_hand])
+    embed = discord.Embed(title="블랙잭", description=f'플레이어의 카드: {player_cards_str}\n합계: {player_total}\n히트 하려면 `h`, 스테이 하려면 `s`를 입력해주세요.', color=discord.Color.green())
+    await ctx.send(embed=embed)
+
+    while True:
+        def check(msg):
+            return msg.author == ctx.author and msg.channel == ctx.channel and msg.content.lower() in ['h', 's']
+
+        try:
+            choice_msg = await bot.wait_for('message', check=check, timeout=60)
+            choice = choice_msg.content.lower()
+
+            if choice == 'h':
+                game.hit()
+                player_cards_str = ', '.join([card["rank"] for card in game.player_hand])
+                player_total = sum([10 if card["rank"] in ['J', 'Q', 'K'] else 11 if card["rank"] == 'A' else int(card["rank"]) for card in game.player_hand])
+                embed = discord.Embed(title="블랙잭", description=f'히트를 선택하셨습니다.\n플레이어의 카드: {player_cards_str}\n합계: {player_total}', color=discord.Color.green())
+                await ctx.send(embed=embed)
+
+                if player_total > 21:
+                    embed = discord.Embed(title="블랙잭", description='플레이어가 버스트되었습니다.', color=discord.Color.red())
+                    await ctx.send(embed=embed)
+                    user_balances[ctx.author.id] -= bet_amount
+                    return
+            else:
+                break
+        except TimeoutError:
+            embed = discord.Embed(title="블랙잭", description='시간이 초과되었습니다.', color=discord.Color.red())
+            await ctx.send(embed=embed)
+            user_balances[ctx.author.id] -= bet_amount
+            return
+
+    dealer_cards_str = ', '.join([card["rank"] for card in game.dealer_hand])
+    dealer_total = sum([10 if card["rank"] in ['J', 'Q', 'K'] else 11 if card["rank"] == 'A' else int(card["rank"]) for card in game.dealer_hand])
+    await ctx.respond(f'딜러의 카드: {dealer_cards_str}\n합계: {dealer_total}')
+
+    while dealer_total < 17:
+        game.hit()
+        dealer_total = sum([10 if card["rank"] in ['J', 'Q', 'K'] else 11 if card["rank"] == 'A' else int(card["rank"]) for card in game.dealer_hand])
+
+    if dealer_total > 21:
+        embed = discord.Embed(title="블랙잭", description='딜러가 버스트되었습니다.', color=discord.Color.green())
+        await ctx.send(embed=embed)
+        user_balances[ctx.author.id] += bet_amount * 2
+    elif dealer_total > player_total:
+        embed = discord.Embed(title="블랙잭", description='딜러가 이겼습니다.', color=discord.Color.red())
+        await ctx.send(embed=embed)
+        user_balances[ctx.author.id] -= bet_amount
+    elif dealer_total < player_total:
+        embed = discord.Embed(title="블랙잭", description='플레이어가 이겼습니다.', color=discord.Color.green())
+        await ctx.send(embed=embed)
+        user_balances[ctx.author.id] += bet_amount * 2
+    else:
+        embed = discord.Embed(title="블랙잭", description='무승부입니다.', color=discord.Color.yellow())
+        await ctx.send(embed=embed)
+
 @bot.slash_command(name='잔액')
 async def balance(ctx):
     if ctx.author.id not in user_balances:
